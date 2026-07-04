@@ -1,0 +1,6 @@
+{
+  "name": "CyberSentinel AI - Caso 3",
+  "description": "Módulo de Ciencia de Datos para la priorización inteligente de incidentes de ciberseguridad mediante RandomForest (Caso 3).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
