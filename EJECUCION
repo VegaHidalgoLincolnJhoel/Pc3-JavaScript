@@ -1,0 +1,14 @@
+Terminal 1 (Python / IA): Ve a la carpeta de tu servicio de Python y arranca el motor analítico ejecutando uvicorn main:app --port 8001 --reload.
+Si entras a http://localhost:8001/docs y carga Swagger, la IA ya está escuchando en el puerto 8001.
+
+Terminal 2 (Spring Boot / Backend): Ve a la carpeta de tu backend en Java y ejecuta 
+./mvnw spring-boot:run o mvn spring-boot:run (o dale al botón de "Run" en la clase principal CyberSentinelApplication.java en VS Code). El servidor embebido Tomcat se levantará en el puerto 8080.
+
+Terminal 3 (React / Frontend): Ve a la carpeta CyberSentinel-Front, ejecuta npm install (solo la primera vez)
+y luego npm run dev para encender la interfaz de usuario en http://localhost:5173.
+
+Prueba del Circuito Completo: Con las 3 terminales corriendo en paralelo, abre tu navegador en http://localhost:5173.
+Asegúrate de que en la esquina superior derecha diga "Probar Endpoint Backend:" (lo que confirma que configuraste const USAR_BACKEND_REAL = true; en tu código). 
+Haz clic en cualquiera de los botones de prueba rápida (BAJO, ALTO, CRÍTICO). Al presionarlo, React enviará las métricas por un método POST a Spring Boot (:8080), 
+este saltará internamente por red hacia Python (:8001) para evaluar el modelo, y la respuesta regresará por todo el camino de vuelta para pintar los resultados de la IA, 
+el porcentaje de confianza y añadir el registro con su color respectivo a la Bitácora Histórica de Incidentes.
