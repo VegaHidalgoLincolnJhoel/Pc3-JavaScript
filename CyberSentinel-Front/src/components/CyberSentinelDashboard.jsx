@@ -6,6 +6,26 @@ import RecommendationsPanel from './RecommendationsPanel';
 const USAR_BACKEND_REAL = false; 
 const BASE_URL = "http://localhost:8080/api/cyber-sentinel";
 
+// snake_case (frontend) -> camelCase con typos (backend real)
+const toBackendMetrics = (metrics) => ({
+  intentosLoginFallidos: metrics.intentos_login_fallidos,
+  puertosAbiertos: metrics.puertos_abiertos,
+  vulnerabilidadesCriticas: metrics.vulnerabilidades_criticas,
+  traficoAnomoloPct: metrics.trafico_anomalo_pct,
+  equiposAfectados: metrics.equipos_afectados,
+  parchaeadoPct: metrics.parcheado_pct,
+});
+
+// camelCase con typos (backend real) -> snake_case (frontend)
+const toFrontendMetrics = (inc) => ({
+  intentos_login_fallidos: inc.intentosLoginFallidos,
+  puertos_abiertos: inc.puertosAbiertos,
+  vulnerabilidades_criticas: inc.vulnerabilidadesCriticas,
+  trafico_anomalo_pct: inc.traficoAnomoloPct,
+  equipos_afectados: inc.equiposAfectados,
+  parcheado_pct: inc.parchaeadoPct,
+});
+
 // Casos locales idénticos a los del API para simulación o envío
 const mockIncidents = [
   { 
@@ -46,7 +66,7 @@ export default function CyberSentinelDashboard() {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(incidentData.metrics) // Envía los 6 parámetros requeridos por el backend
+        body: JSON.stringify(toBackendMetrics(incidentData.metrics)) // Traduce snake_case -> camelCase real del backend
       });
 
       if (!response.ok) {
@@ -61,7 +81,8 @@ export default function CyberSentinelDashboard() {
         timestamp: resData.timestamp ? new Date(resData.timestamp).toLocaleString() : new Date().toLocaleString(),
         prediction: resData.prediction || resData.severity, // Soporta ambos campos mapeados por tu backend
         metrics: incidentData.metrics,
-        recommendations: resData.recommendations // Captura las recomendaciones de la IA
+        confidence: resData.confidence, // Confianza real del modelo (0.0 - 1.0)
+        recommendations: resData.recommendations // Recomendaciones reales generadas por MLPredictionService
       });
 
       // Si todo sale bien, refrescamos el historial desde el backend
@@ -164,6 +185,25 @@ export default function CyberSentinelDashboard() {
                 {currentIncident.prediction}
               </span>
             </div>
+
+            {/* Datos reales del modelo backend (solo aparecen si vienen del API real) */}
+            {(currentIncident.confidence != null || currentIncident.recommendations) && (
+              <div style={{ backgroundColor: '#1f2937', padding: '20px', borderRadius: '12px', border: '1px solid #374151' }}>
+                <h4 style={{ fontSize: '12px', fontWeight: 'bold', color: '#9ca3af', textTransform: 'uppercase', margin: '0 0 8px 0' }}>
+                  Respuesta del Modelo (Backend)
+                </h4>
+                {currentIncident.confidence != null && (
+                  <p style={{ fontSize: '14px', margin: '0 0 8px 0', color: '#d1d5db' }}>
+                    Confianza de la predicción: <strong style={{ color: '#fff' }}>{Math.round(currentIncident.confidence * 100)}%</strong>
+                  </p>
+                )}
+                {currentIncident.recommendations && (
+                  <p style={{ fontSize: '14px', margin: 0, color: '#d1d5db', lineHeight: '1.5' }}>
+                    {currentIncident.recommendations}
+                  </p>
+                )}
+              </div>
+            )}
             
             {/* Bloques de Métricas y Recomendaciones Alineados */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px', alignItems: 'stretch' }}>
@@ -215,14 +255,8 @@ export default function CyberSentinelDashboard() {
                               id: idMostrar,
                               timestamp: fechaMostrar,
                               prediction: severidad,
-                              metrics: {
-                                intentos_login_fallidos: inc.intentos_login_fallidos,
-                                puertos_abiertos: inc.puertos_abiertos,
-                                vulnerabilidades_criticas: inc.vulnerabilidades_criticas,
-                                trafico_anomalo_pct: inc.trafico_anomalo_pct,
-                                equipos_afectados: inc.equipos_afectados,
-                                parcheado_pct: inc.parcheado_pct
-                              },
+                              metrics: toFrontendMetrics(inc),
+                              confidence: inc.confidence,
                               recommendations: inc.recommendations
                             });
                           } else {
