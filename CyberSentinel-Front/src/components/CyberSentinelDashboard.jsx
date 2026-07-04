@@ -3,28 +3,8 @@ import MetricsGrid from './MetricsGrid';
 import RecommendationsPanel from './RecommendationsPanel';
 
 // CONFIGURACIÓN: Cambia a true cuando quieras conectarte con el backend real de tu grupo
-const USAR_BACKEND_REAL = false; 
+const USAR_BACKEND_REAL = true; // true = React -> Spring Boot -> Python; false = solo simulación local con mocks
 const BASE_URL = "http://localhost:8080/api/cyber-sentinel";
-
-// snake_case (frontend) -> camelCase con typos (backend real)
-const toBackendMetrics = (metrics) => ({
-  intentosLoginFallidos: metrics.intentos_login_fallidos,
-  puertosAbiertos: metrics.puertos_abiertos,
-  vulnerabilidadesCriticas: metrics.vulnerabilidades_criticas,
-  traficoAnomoloPct: metrics.trafico_anomalo_pct,
-  equiposAfectados: metrics.equipos_afectados,
-  parchaeadoPct: metrics.parcheado_pct,
-});
-
-// camelCase con typos (backend real) -> snake_case (frontend)
-const toFrontendMetrics = (inc) => ({
-  intentos_login_fallidos: inc.intentosLoginFallidos,
-  puertos_abiertos: inc.puertosAbiertos,
-  vulnerabilidades_criticas: inc.vulnerabilidadesCriticas,
-  trafico_anomalo_pct: inc.traficoAnomoloPct,
-  equipos_afectados: inc.equiposAfectados,
-  parcheado_pct: inc.parchaeadoPct,
-});
 
 // Casos locales idénticos a los del API para simulación o envío
 const mockIncidents = [
@@ -49,7 +29,7 @@ const mockIncidents = [
 ];
 
 export default function CyberSentinelDashboard() {
-  // Inicializa por defecto con el caso crítico simulado para tu reto especial
+  // Inicializa por defecto con el caso crítico simulado
   const [currentIncident, setCurrentIncident] = useState(mockIncidents[2]);
   const [historico, setHistorico] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -66,27 +46,33 @@ export default function CyberSentinelDashboard() {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(toBackendMetrics(incidentData.metrics)) // Traduce snake_case -> camelCase real del backend
+        body: JSON.stringify(incidentData.metrics) // Envía las métricas en snake_case
       });
+
+      const resData = await response.json().catch(() => null);
 
       if (!response.ok) {
-        throw new Error('Error al procesar la predicción en el servidor de Spring Boot.');
+        const detalle = resData?.detail || resData?.error || 'Error al procesar la predicción.';
+        throw new Error(typeof detalle === 'string' ? detalle : JSON.stringify(detalle));
       }
 
-      const resData = await response.json();
-      
-      // Mapeamos la respuesta del backend para que encaje perfectamente con la UI
-      setCurrentIncident({
-        id: `INC-REAL-${resData.timestamp ? String(resData.timestamp).slice(-4) : '001'}`,
-        timestamp: resData.timestamp ? new Date(resData.timestamp).toLocaleString() : new Date().toLocaleString(),
-        prediction: resData.prediction || resData.severity, // Soporta ambos campos mapeados por tu backend
+      // CORRECCIÓN DE MAPEO: Sincronizado con las variables en inglés de la documentación del Backend
+      const nuevoIncidente = {
+        id: `INC-REAL-${Date.now().toString().slice(-4)}`,
+        timestamp: new Date().toLocaleString(),
+        prediction: resData.prediction || resData.severity, // Lee 'prediction' o 'severity' del back
         metrics: incidentData.metrics,
-        confidence: resData.confidence, // Confianza real del modelo (0.0 - 1.0)
-        recommendations: resData.recommendations // Recomendaciones reales generadas por MLPredictionService
-      });
+        confidence: resData.confidence, // Lee 'confidence' en inglés
+        recommendations: Array.isArray(resData.recommendations)
+          ? resData.recommendations.join(' ')
+          : resData.recommendations,
+        ranking: resData.ranking || []
+      };
 
-      // Si todo sale bien, refrescamos el historial desde el backend
-      cargarHistorialReal();
+      setCurrentIncident(nuevoIncidente);
+
+      // Agrega el nuevo reporte al tope de la bitácora local de la sesión
+      setHistorico(prev => [nuevoIncidente, ...prev]);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -94,48 +80,68 @@ export default function CyberSentinelDashboard() {
     }
   };
 
-  // Función para obtener la lista histórica desde GET /incidents del backend
-  const cargarHistorialReal = async () => {
-    try {
-      const response = await fetch(`${BASE_URL}/incidents`);
-      if (response.ok) {
-        const data = await response.json();
-        setHistorico(data);
-      }
-    } catch (err) {
-      console.error("Error al cargar la bitácora del backend:", err);
-    }
-  };
-
-  // Carga inicial del historial si la integración real está activa
+  // Carga inicial: en modo simulado usamos los mocks; en modo real iniciamos vacío
   useEffect(() => {
-    if (USAR_BACKEND_REAL) {
-      procesarPrediccionReal(mockIncidents[2]); // Carga inicial enviando el caso crítico real
-    } else {
-      setHistorico(mockIncidents); // En modo simulación usa el arreglo local
+    if (!USAR_BACKEND_REAL) {
+      setHistorico(mockIncidents);
     }
   }, []);
 
   const handleSeleccionCaso = (inc) => {
     if (USAR_BACKEND_REAL) {
-      procesarPrediccionReal(inc); // Hace la llamada real por POST
+      procesarPrediccionReal(inc); // Ejecuta el flujo real completo
     } else {
-      setCurrentIncident(inc); // Cambia de forma local instantánea
+      setCurrentIncident(inc); // Cambia instantáneamente de modo local
     }
   };
 
   const getSeverityStyle = (severity) => {
-    switch (severity) {
-      case 'BAJO': return { backgroundColor: '#22c55e', color: '#fff' };
-      case 'MEDIO': return { backgroundColor: '#eab308', color: '#000' };
-      case 'ALTO': return { backgroundColor: '#f97316', color: '#fff' };
-      case 'CRITICO': return { backgroundColor: '#dc2626', color: '#fff' };
-      default: return { backgroundColor: '#6b7280', color: '#fff' };
+    if (!severity) return { backgroundColor: '#6b7280', color: '#fff' };
+    
+    // Limpiamos el string para la evaluación de colores
+    const cleanSeverity = severity.toUpperCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    
+    switch (cleanSeverity) {
+      case 'BAJO':
+      case 'LOW': 
+        return { backgroundColor: '#22c55e', color: '#fff' }; // Verde
+      case 'MEDIO':
+      case 'MEDIUM': 
+        return { backgroundColor: '#eab308', color: '#000' }; // Amarillo
+      case 'ALTO':
+      case 'HIGH': 
+        return { backgroundColor: '#f97316', color: '#fff' }; // Naranja
+      case 'CRITICO':
+      case 'CRITICAL': 
+        return { backgroundColor: '#dc2626', color: '#fff' }; // Rojo
+      default: 
+        // Si no entra en ninguno, dejamos el fondo gris oscuro pero añadimos un borde rojo de advertencia
+        return { backgroundColor: '#374151', color: '#ef4444', border: '1px solid #ef4444' }; 
     }
   };
+  
+  const sonSeveridadesIguales = (sev1, sev2) => {
+    if (!sev1 || !sev2) return false;
+    
+    // Función interna para limpiar cualquier texto (quita tildes, espacios y pasa a mayúsculas)
+    const norm = (str) => {
+      if (typeof str !== 'string') return String(str);
+      return str.toUpperCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    };
 
-  if (loading) return <div style={{ backgroundColor: '#111827', color: '#3b82f6', minHeight: '100vh', padding: '24px', fontFamily: 'sans-serif' }}>⚙️ Consultando al Modelo Predictivo en Spring Boot (`POST /predict`)...</div>;
-  if (error) return <div style={{ backgroundColor: '#111827', color: '#ef4444', minHeight: '100vh', padding: '24px', fontFamily: 'sans-serif' }}>⚠️ Error de Integración: {error} <br/><small style={{color: '#9ca3af'}}>Verifica que la API base `http://localhost:8080/api/cyber-sentinel` esté en ejecución.</small></div>;
+    const s1 = norm(sev1);
+    const s2 = norm(sev2);
+
+    // Mapeo rápido por si el backend responde en inglés
+    const mapeoIngles = { 'LOW': 'BAJO', 'MEDIUM': 'MEDIO', 'HIGH': 'ALTO', 'CRITICAL': 'CRITICO' };
+    const finalS1 = mapeoIngles[s1] || s1;
+    const finalS2 = mapeoIngles[s2] || s2;
+
+    return finalS1 === finalS2;
+  };
+
+  if (loading) return <div style={{ backgroundColor: '#111827', color: '#3b82f6', minHeight: '100vh', padding: '24px', fontFamily: 'sans-serif' }}>⚙️ Consultando al Modelo Predictivo (Spring Boot → Python `POST /predict`)...</div>;
+  if (error) return <div style={{ backgroundColor: '#111827', color: '#ef4444', minHeight: '100vh', padding: '24px', fontFamily: 'sans-serif' }}>⚠️ Error de Integración: {error} <br/><small style={{color: '#9ca3af'}}>Verifica que Spring Boot (:8080) y la IA de Python (:8001) estén activos.</small></div>;
 
   return (
     <div style={{ backgroundColor: '#111827', color: '#f3f4f6', minHeight: '100vh', padding: '24px', fontFamily: 'sans-serif' }}>
@@ -160,7 +166,7 @@ export default function CyberSentinelDashboard() {
                 borderRadius: '4px', 
                 cursor: 'pointer', 
                 border: 'none', 
-                backgroundColor: currentIncident?.prediction === inc.prediction ? '#2563eb' : '#4b5563', 
+                backgroundColor: sonSeveridadesIguales(currentIncident?.prediction, inc.prediction) ? '#2563eb' : '#4b5563', 
                 color: '#fff'
               }}
             >
@@ -186,21 +192,35 @@ export default function CyberSentinelDashboard() {
               </span>
             </div>
 
-            {/* Datos reales del modelo backend (solo aparecen si vienen del API real) */}
-            {(currentIncident.confidence != null || currentIncident.recommendations) && (
+            {/* Datos Analíticos de Python */}
+            {(currentIncident.confidence != null || currentIncident.recommendations || (Array.isArray(currentIncident.ranking) && currentIncident.ranking.length > 0)) && (
               <div style={{ backgroundColor: '#1f2937', padding: '20px', borderRadius: '12px', border: '1px solid #374151' }}>
-                <h4 style={{ fontSize: '12px', fontWeight: 'bold', color: '#9ca3af', textTransform: 'uppercase', margin: '0 0 8px 0' }}>
-                  Respuesta del Modelo (Backend)
+                <h4 style={{ fontSize: '12px', fontWeight: 'bold', color: '#60a5fa', textTransform: 'uppercase', margin: '0 0 8px 0' }}>
+                  Respuesta Analítica del Core IA
                 </h4>
                 {currentIncident.confidence != null && (
                   <p style={{ fontSize: '14px', margin: '0 0 8px 0', color: '#d1d5db' }}>
-                    Confianza de la predicción: <strong style={{ color: '#fff' }}>{Math.round(currentIncident.confidence * 100)}%</strong>
+                    Confianza de Evaluación: <strong style={{ color: '#fff' }}>{Math.round(currentIncident.confidence * 100)}%</strong>
                   </p>
                 )}
                 {currentIncident.recommendations && (
-                  <p style={{ fontSize: '14px', margin: 0, color: '#d1d5db', lineHeight: '1.5' }}>
-                    {currentIncident.recommendations}
+                  <p style={{ fontSize: '14px', margin: '0 0 8px 0', color: '#e5e7eb', lineHeight: '1.5' }}>
+                    <strong>Análisis:</strong> {currentIncident.recommendations}
                   </p>
+                )}
+                {Array.isArray(currentIncident.ranking) && currentIncident.ranking.length > 0 && (
+                  <div style={{ marginTop: '12px' }}>
+                    <h5 style={{ fontSize: '11px', fontWeight: 'bold', color: '#9ca3af', textTransform: 'uppercase', margin: '0 0 6px 0' }}>
+                      Distribución de Probabilidades
+                    </h5>
+                    <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', color: '#9ca3af' }}>
+                      {currentIncident.ranking.map((r, idx) => (
+                        <li key={idx} style={{ marginBottom: '2px' }}>
+                          <span style={{ color: '#d1d5db', fontWeight: '500' }}>{r.clase}:</span> {Math.round(r.probabilidad * 100)}%
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </div>
             )}
@@ -218,62 +238,50 @@ export default function CyberSentinelDashboard() {
         </div>
       )}
 
-      {/* Bitácora Histórica de Incidentes */}
+      {/* Bitácora Histórica */}
       <section style={{ marginTop: '32px', backgroundColor: '#1f2937', padding: '24px', borderRadius: '12px', border: '1px solid #374151' }}>
         <h3 style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 16px 0', color: '#fff' }}>Bitácora Histórica de Incidentes</h3>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid #374151', color: '#9ca3af', textAlign: 'left' }}>
-                <th style={{ padding: '12px' }}>ID Incidente</th>
-                <th style={{ padding: '12px' }}>Fecha / Hora</th>
-                <th style={{ padding: '12px' }}>Severidad</th>
-                <th style={{ padding: '12px' }}>Acción</th>
-              </tr>
-            </thead>
-            <tbody>
-              {historico.map((inc, index) => {
-                const severidad = inc.prediction || inc.severity;
-                const idMostrar = inc.id && typeof inc.id === 'number' ? `INC-DB-00${inc.id}` : inc.id;
-                const fechaMostrar = inc.createdAt ? new Date(inc.createdAt).toLocaleString() : inc.timestamp;
-
-                return (
+        {historico.length === 0 && (
+          <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>
+            Aún no hay incidentes evaluados en esta sesión. Selecciona un caso para disparar la petición REST.
+          </p>
+        )}
+        {historico.length > 0 && (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #374151', color: '#9ca3af', textAlign: 'left' }}>
+                  <th style={{ padding: '12px' }}>ID Incidente</th>
+                  <th style={{ padding: '12px' }}>Fecha / Hora</th>
+                  <th style={{ padding: '12px' }}>Severidad</th>
+                  <th style={{ padding: '12px' }}>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {historico.map((inc, index) => (
                   <tr key={inc.id || index} style={{ borderBottom: '1px solid #374151' }}>
-                    <td style={{ padding: '12px', fontFamily: 'monospace', color: '#60a5fa' }}>{idMostrar}</td>
-                    <td style={{ padding: '12px', color: '#d1d5db' }}>{fechaMostrar}</td>
+                    <td style={{ padding: '12px', fontFamily: 'monospace', color: '#60a5fa' }}>{inc.id}</td>
+                    <td style={{ padding: '12px', color: '#d1d5db' }}>{inc.timestamp}</td>
                     <td style={{ padding: '12px' }}>
-                      <span style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', ...getSeverityStyle(severidad) }}>
-                        {severidad}
+                      {/* CORRECCIÓN: Pinta la celda de severidad usando el string limpio */}
+                      <span style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', ...getSeverityStyle(inc.prediction) }}>
+                        {inc.prediction}
                       </span>
                     </td>
                     <td style={{ padding: '12px' }}>
                       <button 
-                        onClick={() => {
-                          if (USAR_BACKEND_REAL) {
-                            // Reconstruye el objeto para inspección si viene del API real
-                            setCurrentIncident({
-                              id: idMostrar,
-                              timestamp: fechaMostrar,
-                              prediction: severidad,
-                              metrics: toFrontendMetrics(inc),
-                              confidence: inc.confidence,
-                              recommendations: inc.recommendations
-                            });
-                          } else {
-                            setCurrentIncident(inc);
-                          }
-                        }}
+                        onClick={() => setCurrentIncident(inc)}
                         style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', textDecoration: 'underline', fontSize: '13px' }}
                       >
                         Inspeccionar
                       </button>
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
     </div>

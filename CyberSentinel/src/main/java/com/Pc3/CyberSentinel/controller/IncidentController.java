@@ -1,15 +1,17 @@
 package com.Pc3.CyberSentinel.controller;
 
-import com.Pc3.CyberSentinel.dto.IncidentDataDTO;
-import com.Pc3.CyberSentinel.dto.PredictionResponseDTO;
 import com.Pc3.CyberSentinel.model.Incident;
 import com.Pc3.CyberSentinel.model.SeverityLevel;
 import com.Pc3.CyberSentinel.service.IncidentService;
-import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.HashMap;
 import java.util.List;
@@ -27,20 +29,51 @@ public class IncidentController {
     @Autowired
     private IncidentService incidentService;
 
+    // Pasarela hacia el servicio Python (FastAPI) que ejecuta el modelo entrenado
+    private final RestTemplate restTemplate = new RestTemplate();
+    private static final String PYTHON_URL = "http://localhost:8001";
+
     /**
      * POST /api/cyber-sentinel/predict
-     * Predict severity level for a security incident
+     * Recibe las métricas desde React, las reenvía tal cual al servicio de IA
+     * en Python (FastAPI) y devuelve la respuesta real del modelo (predicción,
+     * confianza, ranking y recomendaciones) sin modificarla ni persistirla.
      *
-     * @param incidentData The incident metrics
-     * @return Prediction response with severity, confidence, and recommendations
+     * Flujo: React -> Spring Boot (esta pasarela) -> Python /predict/cyber-sentinel -> Spring Boot -> React
+     *
+     * @param datos Las métricas del incidente, en snake_case, tal como las espera Python
+     * @return La respuesta JSON cruda que devuelve el modelo de Python
      */
     @PostMapping("/predict")
-    public ResponseEntity<PredictionResponseDTO> predictIncident(@Valid @RequestBody IncidentDataDTO incidentData) {
+    public ResponseEntity<String> predictIncident(@RequestBody Map<String, Object> datos) {
+        String url = PYTHON_URL + "/predict/cyber-sentinel";
         try {
-            PredictionResponseDTO prediction = incidentService.procesIncident(incidentData);
-            return ResponseEntity.ok(prediction);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            String respuestaPython = restTemplate.postForObject(url, datos, String.class);
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(respuestaPython);
+
+        } catch (HttpStatusCodeException e) {
+            // Python respondió con un error (ej. 422 por validación de rangos con Pydantic)
+            return ResponseEntity.status(e.getStatusCode())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(e.getResponseBodyAsString());
+
+        } catch (ResourceAccessException e) {
+            // Python no está corriendo o no responde en el puerto 8001
+            String errorJson = "{\"error\":\"No se pudo conectar con el servicio de IA (Python).\"," +
+                    "\"url\":\"" + url + "\"," +
+                    "\"detail\":\"Verifica que uvicorn esté corriendo en el puerto 8001 (uvicorn app:app --reload --port 8001).\"}";
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(errorJson);
+
+        } catch (RestClientException e) {
+            String errorJson = "{\"error\":\"Error inesperado al consumir el servicio de IA.\"," +
+                    "\"detail\":\"" + e.getMessage().replace("\"", "'") + "\"}";
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(errorJson);
         }
     }
 
