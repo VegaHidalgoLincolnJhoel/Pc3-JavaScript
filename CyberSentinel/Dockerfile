@@ -1,5 +1,5 @@
-# Etapa 1: Construcción (Build)
-FROM eclipse-temurin:17-jdk-jammy AS build
+# Etapa 1: Construcción (Build) usando Java 21
+FROM eclipse-temurin:21-jdk-jammy AS build
 WORKDIR /app
 
 # Copiar el wrapper de Maven y el archivo pom
@@ -16,8 +16,8 @@ RUN ./mvnw dependency:go-offline
 COPY src ./src
 RUN ./mvnw clean package -DskipTests
 
-# Etapa 2: Ejecución (Run)
-FROM eclipse-temurin:17-jre-jammy
+# Etapa 2: Ejecución (Run) usando Java 21
+FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
 
 # Copiar el .jar compilado desde la etapa anterior
