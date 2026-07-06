@@ -360,7 +360,9 @@ import java.util.Map;
 public class PrediccionController {
 
     private final RestTemplate restTemplate = new RestTemplate();
-    private final String PYTHON_URL = "http://localhost:8001";
+    private final String PYTHON_URL = System.getenv("PYTHON_API_URL") != null 
+        ? System.getenv("PYTHON_API_URL") 
+        : "http://localhost:8001";
 
     @PostMapping("/cyber-sentinel")
     public ResponseEntity<String> predecirCyberSentinel(@RequestBody Map<String, Object> datos) {
@@ -387,7 +389,7 @@ export const REACT_SERVICE_CODE = `import axios from "axios";
 export async function predecirIncidenteCyber(formData) {
   try {
     const response = await axios.post(
-      "http://localhost:8080/api/prediccion/cyber-sentinel",
+      "https://pc3-javascript.onrender.com/api/prediccion/cyber-sentinel",
       formData
     );
     return response.data;

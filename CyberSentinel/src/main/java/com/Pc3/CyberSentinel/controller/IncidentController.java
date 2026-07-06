@@ -31,7 +31,9 @@ public class IncidentController {
 
     // Pasarela hacia el servicio Python (FastAPI) que ejecuta el modelo entrenado
     private final RestTemplate restTemplate = new RestTemplate();
-    private static final String PYTHON_URL = "http://localhost:8001";
+    private final String PYTHON_URL = System.getenv("PYTHON_API_URL") != null 
+        ? System.getenv("PYTHON_API_URL") 
+        : "http://localhost:8001";
 
     /**
      * POST /api/cyber-sentinel/predict
