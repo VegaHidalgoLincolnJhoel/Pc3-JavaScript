@@ -23,7 +23,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/cyber-sentinel")
-@CrossOrigin(origins = "*", maxAge = 3600)
+@CrossOrigin(origins = {"http://localhost:5173", "https://pc3-java-script.vercel.app/"})
 public class IncidentController {
 
     @Autowired

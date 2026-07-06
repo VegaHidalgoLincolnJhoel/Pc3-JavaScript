@@ -356,7 +356,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/prediccion")
-@CrossOrigin(origins = "http://localhost:5173") // Permitir llamadas desde el frontend React
+@CrossOrigin(origins = {"http://localhost:5173", "https://pc3-java-script.vercel.app/"})
 public class PrediccionController {
 
     private final RestTemplate restTemplate = new RestTemplate();
