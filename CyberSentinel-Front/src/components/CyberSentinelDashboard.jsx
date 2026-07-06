@@ -168,7 +168,7 @@ export default function CyberSentinelDashboard() {
                 borderRadius: '4px', 
                 cursor: 'pointer', 
                 border: 'none', 
-                backgroundColor: sonSeveridadesIguales(currentIncident?.prediction, inc.prediction) ? '#2563eb' : '#4b5563', 
+                backgroundColor: selectedMock === inc.id ? '#2563eb' : '#4b5563', 
                 color: '#fff'
               }}
             >
