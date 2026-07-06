@@ -34,6 +34,7 @@ export default function CyberSentinelDashboard() {
   const [historico, setHistorico] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [selectedMock, setSelectedMock] = useState(mockIncidents[2]?.id);
 
   // Función principal para enviar métricas al endpoint POST /predict del backend
   const procesarPrediccionReal = async (incidentData) => {
@@ -88,6 +89,7 @@ export default function CyberSentinelDashboard() {
   }, []);
 
   const handleSeleccionCaso = (inc) => {
+    setSelectedMock(inc.id);
     if (USAR_BACKEND_REAL) {
       procesarPrediccionReal(inc); // Ejecuta el flujo real completo
     } else {
