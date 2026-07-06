@@ -4,7 +4,7 @@ import RecommendationsPanel from './RecommendationsPanel';
 
 // CONFIGURACIÓN: Cambia a true cuando quieras conectarte con el backend real de tu grupo
 const USAR_BACKEND_REAL = true; // true = React -> Spring Boot -> Python; false = solo simulación local con mocks
-const BASE_URL = "https://pc3-javascript.onrender.com/api/cyber-sentinel"; // Cambia a tu URL de backend real si es necesario";
+const BASE_URL = import.meta.env.VITE_SPRINGBOOT_URL || "http://localhost:8080/api/cyber-sentinel";
 
 // Casos locales idénticos a los del API para simulación o envío
 const mockIncidents = [
