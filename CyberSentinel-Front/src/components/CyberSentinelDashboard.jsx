@@ -4,7 +4,7 @@ import RecommendationsPanel from './RecommendationsPanel';
 
 // CONFIGURACIÓN: Cambia a true cuando quieras conectarte con el backend real de tu grupo
 const USAR_BACKEND_REAL = true; // true = React -> Spring Boot -> Python; false = solo simulación local con mocks
-const BASE_URL = import.meta.env.VITE_SPRINGBOOT_URL || "http://localhost:8080/api/cyber-sentinel";
+const BASE_URL = import.meta.env.VITE_SPRINGBOOT_URL || "http://localhost:8080";
 
 // Casos locales idénticos a los del API para simulación o envío
 const mockIncidents = [
@@ -41,7 +41,7 @@ export default function CyberSentinelDashboard() {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`${BASE_URL}/predict`, {
+      const response = await fetch(`${BASE_URL}/api/cyber-sentinel/predict`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
