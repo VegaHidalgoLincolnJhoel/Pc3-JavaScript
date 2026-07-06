@@ -1,0 +1,19 @@
+name: Keep Render Backends Awake
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Spring Boot Backend
+        run: curl -I https://pc3-javascript.onrender.com || true
+
+      - name: Ping Python AI Backend
+        run: curl -I https://pc3-javascript-1.onrender.com || true
+
+      - name: Log timestamp
+        run: echo "Ping sent at $(date)"
